@@ -155,7 +155,7 @@ byte* inflate(byte *compressed, int compressed_len, int *uncompressed_len) {
     byte length_bits[MAX_CODE_LENGTHS + 1];
     byte literal_bits[MAX_CODE_LITERALS + 1];
     int code = 0, leb = 0, deb = 0;
-    int length = 0, distance = 0, offset = 0;
+    int length = 0, distance = 0, offset = 0, save_index;
     struct inflate_context context;
     
     memset(distance_bits, 0, sizeof(distance_bits));
@@ -189,11 +189,14 @@ byte* inflate(byte *compressed, int compressed_len, int *uncompressed_len) {
         context.index += 2;
     }
     
+    save_index = context.index; // 保存index当前位置
     context.index = compressed_len - 4;
     *uncompressed_len = read_bits(&context, 16) | (read_bits(&context, 16) << 16);
     uncompressed = (byte *) malloc(*uncompressed_len * sizeof(byte));
     memset(uncompressed, 0, *uncompressed_len * sizeof(byte));
     uncompressed_index = 0;
+    
+    context.index = save_index; // 恢复index位置
     bfinal = 0;
     btype = 0;
     

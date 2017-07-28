@@ -57,7 +57,7 @@ void print_binary(FILE *fp, void *ptr, int len)
     fflush(fp);
 }
 
-int test_gunzip(void)
+int test_gunzip(const char *input_file, const char *output_file)
 {
     int fd, out_fd;
     int uncompressed_len;
@@ -65,12 +65,12 @@ int test_gunzip(void)
     struct stat stat;
     unsigned char *origin, *dest;
     
-    if ((fd = open("/Users/gaobo/Desktop/workspace/eslworking/tmp/fm.bin.gz", O_RDONLY)) < 0) {
+    if ((fd = open(input_file, O_RDONLY)) < 0) {
         perror("open() source:");
         return -1;
     }
     
-    if ((out_fd = open("/Users/gaobo/Desktop/workspace/eslworking/tmp/result", O_RDWR | O_CREAT | S_IRUSR | S_IWUSR)) < 0) {
+    if ((out_fd = open(output_file, O_RDWR | O_CREAT | O_TRUNC, 0644)) < 0) {
         perror("open() dest:");
         return -1;
     }
@@ -137,9 +137,15 @@ int test_aes(void)
     return 0;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    test_aes();
+    if (argc < 3) {
+        fprintf(stderr, "Usage: %s <input file> <output file>\n", argv[0]);
+        return 1;
+    }
+    
+    printf("sizeof inflate context = %d\n", sizeof(struct inflate_context));
+    test_gunzip(argv[1], argv[2]);
     
     return 0;
 }

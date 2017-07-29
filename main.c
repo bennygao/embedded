@@ -80,7 +80,7 @@ int test_gunzip(const char *input_file, const char *output_file)
     
     ulen = gunzip(fd, (int) stat.st_size, out_fd);
     if (ulen < 0) {
-        fprintf(stderr, "gunzip error code=%d", ulen);
+        fprintf(stderr, "gunzip error code=%d\n", ulen);
     }
     close(fd);
     close(out_fd);

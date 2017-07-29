@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdarg.h>
 
 #include "gunzip.h"
 
@@ -14,6 +15,17 @@ const static int DISTANCE_EXTRA_BITS[] = {0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5,
 const static int DISTANCE_VALUES[] = {1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577};
 
 const static int DYNAMIC_LENGTH_ORDER[] = {16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15};
+
+static void trace(FILE *fp, const char *fmt, ...)
+{
+    va_list ap;
+    
+    va_start(ap, fmt);
+#ifdef DEBUG
+    vfprintf(fp, fmt, ap);
+#endif
+    va_end(ap);
+}
 
 int read_byte(int fd, int offset)
 {
@@ -68,23 +80,17 @@ static void create_huffman_tree(byte *bits, int maxCode, int *tree) {
     
     for (i = 0; i < maxCode + 1; i++) {
         bv = bits[i];
-#ifdef DEBUG
-        fprintf(stderr, "(%d %d)", bv, bl_count[bv]);
-#endif
+        trace(stderr, "(%d %d)", bv, bl_count[bv]);
         bl_count[bv]++;
     }
-#ifdef DEBUG
-    fprintf(stderr, "\n");
-#endif
+    trace(stderr, "\n");
     bl_count[0] = 0;
     
-#ifdef DEBUG
-    fprintf(stderr, "maxCode=%d bitsLength=%d bl_count[%d]: ", maxCode, maxCode + 1, MAX_BITS + 1);
+    trace(stderr, "maxCode=%d bitsLength=%d bl_count[%d]: ", maxCode, maxCode + 1, MAX_BITS + 1);
     for (i = 0; i < MAX_BITS + 1; ++i) {
-        fprintf(stderr, "%d,", bl_count[i]);
+        trace(stderr, "%d,", bl_count[i]);
     }
-    fprintf(stderr, "\n");
-#endif
+    trace(stderr, "\n");
     
     for (i = 1; i <= MAX_BITS; i++) {
         bv = bl_count[i - 1];
@@ -92,13 +98,11 @@ static void create_huffman_tree(byte *bits, int maxCode, int *tree) {
         next_code[i] = code;
     }
     
-#ifdef DEBUG
-    fprintf(stderr, "next_code[%d]: ", MAX_BITS + 1);
+    trace(stderr, "next_code[%d]: ", MAX_BITS + 1);
     for (i = 0; i < MAX_BITS + 1; ++i) {
-        fprintf(stderr, "%d,", next_code[i]);
+        trace(stderr, "%d,", next_code[i]);
     }
-    fprintf(stderr, "\n");
-#endif
+    trace(stderr, "\n");
     
     for (i = 0; i <= maxCode; i++) {
         len = bits[i];
@@ -243,9 +247,7 @@ int gunzip(int zfd, int compressed_len, int ufd) {
         btype = read_bits(zfd, &context, 2);
         
         if (btype == BTYPE_NONE) { // 无压缩
-#ifdef DEBUG
-            fprintf(stderr, "--------\n");
-#endif
+            trace(stderr, "--------\n");
             context.bit = 0;
             len = read_bits(zfd, &context, 16);
             read_bits(zfd, &context, 16);
@@ -254,9 +256,7 @@ int gunzip(int zfd, int compressed_len, int ufd) {
             uncompressed_index += len;
         } else {
             if (btype == BTYPE_DYNAMIC) { // 动态Huffman
-#ifdef DEBUG
-                fprintf(stderr, "********\n");
-#endif
+                trace(stderr, "********\n");
                 hlit = read_bits(zfd, &context, 5) + 257;
                 if (hlit - 1 > MAX_CODE_LITERALS) {
                     return ERR_LITERALS_NUM;
@@ -268,19 +268,13 @@ int gunzip(int zfd, int compressed_len, int ufd) {
                 }
                 
                 hclen = read_bits(zfd, &context, 4) + 4;
-#ifdef DEBUG
-                fprintf(stderr, "hclen=%d: ", hclen);
-#endif
+                trace(stderr, "hclen=%d: ", hclen);
                 for (i = 0; i < hclen; i++) {
                     bv = read_bits(zfd, &context, 3);
                     length_bits[DYNAMIC_LENGTH_ORDER[i]] = (byte) bv;
-#ifdef DEBUG
-                    fprintf(stderr, "[%d=%d]", DYNAMIC_LENGTH_ORDER[i], bv);
-#endif
+                    trace(stderr, "[%d=%d]", DYNAMIC_LENGTH_ORDER[i], bv);
                 }
-#ifdef DEBUG
-                fprintf(stderr, "\n");
-#endif
+                trace(stderr, "\n");
                 
                 context.lengths_num = MAX_CODE_LENGTHS;
                 memset(context.lengths_tree, 0, sizeof(context.lengths_tree));
@@ -296,9 +290,7 @@ int gunzip(int zfd, int compressed_len, int ufd) {
                 memset(context.distances_tree, 0, sizeof(context.distances_tree));
                 create_huffman_tree(distance_bits, hdist - 1, context.distances_tree);
             } else { // 静态Huffman
-#ifdef DEBUG
-                fprintf(stderr, "########\n");
-#endif
+                trace(stderr, "########\n");
                 for (int i = 0; i < 144; i++) {
                     literal_bits[i] = 8;
                 }

@@ -1,6 +1,11 @@
+/*
+ * 从J2ME版的GZip解压缩工具移植而来。
+ * https://github.com/brucesq/bruceclient/blob/master/java/reader_client/src/cn/hunthawk/j2me/gzip/GZIP.java
+ */
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "gunzip.h"
 
@@ -36,6 +41,47 @@ const static int DYNAMIC_LENGTH_ORDER[] = {
     16, 17, 18, 0, 8, 7, 9, 6,
     10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15
 };
+
+int read_byte(int fd, int offset)
+{
+    byte b;
+    lseek(fd, offset, SEEK_SET);
+    read(fd, &b, 1);
+    return b & 0xFF;
+}
+
+int copy_bytes(int zfd, int zoff, int ufd, int uoff, int len)
+{
+    byte b;
+    int i;
+    
+    lseek(zfd, zoff, SEEK_SET);
+    lseek(ufd, uoff, SEEK_SET);
+    for (i = 0; i < len; ++i) {
+        read(zfd, &b, 1);
+        write(ufd, &b, 1);
+    }
+    
+    return len;
+}
+
+void write_byte(int fd, int offset, byte v)
+{
+    lseek(fd, offset, SEEK_SET);
+    write(fd, &v, 1);
+}
+
+void move_bytes(int fd, int src, int dst, int len)
+{
+    int i;
+    byte b;
+    for (i = 0; i < len; ++i) {
+        lseek(fd, src + i, SEEK_SET);
+        read(fd, &b, 1);
+        lseek(fd, dst + i, SEEK_SET);
+        write(fd, &b, 1);
+    }
+}
 
 static void create_huffman_tree(byte *bits, int maxCode, int *tree) {
     int bl_count[MAX_BITS + 1];
@@ -87,12 +133,12 @@ static void create_huffman_tree(byte *bits, int maxCode, int *tree) {
     }
 }
 
-static int read_code(int *tree, struct inflate_context *context) {
+static int read_code(int zfd, int *tree, struct inflate_context *context) {
     int node = tree[0];
     
     while (node >= 0) {
         if (context->bit == 0) {
-            context->byte = (context->compressed[context->index++] & 0xFF);
+            context->byte = read_byte(zfd, context->index++);
         }
         
         node = (((context->byte & (1 << context->bit)) == 0) ? tree[node >> 16] : tree[node & 0xFFFF]);
@@ -102,12 +148,12 @@ static int read_code(int *tree, struct inflate_context *context) {
     return (node & 0xFFFF);
 }
 
-static int read_bits(struct inflate_context *context, const int n) {
-    int data = (context->bit == 0 ? (context->byte = (context->compressed[context->index++] & 0xFF)) : (context->byte >> context->bit));
+static int read_bits(int zfd, struct inflate_context *context, const int n) {
+    int data = (context->bit == 0 ? (context->byte = read_byte(zfd, context->index++)) : (context->byte >> context->bit));
     int i;
     
     for (i = (8 - context->bit); i < n; i += 8) {
-        context->byte = (context->compressed[context->index++] & 0xFF);
+        context->byte = read_byte(zfd, context->index++);
         data |= (context->byte << i);
     }
     
@@ -115,21 +161,21 @@ static int read_bits(struct inflate_context *context, const int n) {
     return (data & ((1 << n) - 1));
 }
 
-static void decode_code_lengths(struct inflate_context *context, int count, byte *bits) {
+static void decode_code_lengths(int zfd, struct inflate_context *context, int count, byte *bits) {
     int i, code = 0, last = 0, repeat = 0;
     
     for (i = 0, code = 0, last = 0; i < count; ) {
-        code = read_code(context->lengths_tree, context);
+        code = read_code(zfd, context->lengths_tree, context);
         if (code >= 16) {
             repeat = 0;
             if (code == 16) {
-                repeat = 3 + read_bits(context, 2);
+                repeat = 3 + read_bits(zfd, context, 2);
                 code = last;
             } else {
                 if (code == 17) {
-                    repeat = 3 + read_bits(context, 3);
+                    repeat = 3 + read_bits(zfd, context, 3);
                 } else {
-                    repeat = 11 + read_bits(context, 7);
+                    repeat = 11 + read_bits(zfd, context, 7);
                 }
                 
                 code = 0;
@@ -146,10 +192,11 @@ static void decode_code_lengths(struct inflate_context *context, int count, byte
     }
 }
 
-byte* inflate(byte *compressed, int compressed_len, int *uncompressed_len) {
-    int flg = 0, uncompressed_index = 0;
-    byte *uncompressed;
-    int bfinal = 0, btype = 0, len = 0;
+int gunzip(int zfd, int zlen, int ufd) {
+    int uindex = 0; // 解压缩数据的偏移量索引
+    int ulen = 0; // 解压缩后的长度
+    
+    int flg = 0, bfinal = 0, btype = 0, len = 0;
     int hlit = 0, hdist = 0, hclen = 0, i = 0;
     byte distance_bits[MAX_CODE_DISTANCES + 1];
     byte length_bits[MAX_CODE_LENGTHS + 1];
@@ -162,27 +209,24 @@ byte* inflate(byte *compressed, int compressed_len, int *uncompressed_len) {
     memset(length_bits, 0, sizeof(length_bits));
     memset(literal_bits, 0, sizeof(literal_bits));
     memset(&context, 0, sizeof(struct inflate_context));
-    context.compressed = compressed;
     
-    if (read_bits(&context, 16) != 0x8B1F || read_bits(&context, 8) != 8) {
-        return NULL;
+    if (read_bits(zfd, &context, 16) != 0x8B1F || read_bits(zfd, &context, 8) != 8) {
+        return ERR_FORMAT;
     }
     
-    flg = read_bits(&context, 8);
+    flg = read_bits(zfd, &context, 8);
     context.index += 6;
     
     if ((flg & FEXTRA_MASK) != 0) {
-        context.index += read_bits(&context, 16);
+        context.index += read_bits(zfd, &context, 16);
     }
     
     if ((flg & FNAME_MASK) != 0) {
-        while (compressed[context.index++] != 0) {
-        }
+        while (read_byte(zfd, context.index++) != 0);
     }
     
     if ((flg & FCOMMENT_MASK) != 0) {
-        while (compressed[context.index++] != 0) {
-        }
+        while (read_byte(zfd, context.index++) != 0);
     }
     
     if ((flg & FHCRC_MASK) != 0) {
@@ -190,58 +234,52 @@ byte* inflate(byte *compressed, int compressed_len, int *uncompressed_len) {
     }
     
     save_index = context.index; // 保存index当前位置
-    context.index = compressed_len - 4;
-    *uncompressed_len = read_bits(&context, 16) | (read_bits(&context, 16) << 16);
-    uncompressed = (byte *) malloc(*uncompressed_len * sizeof(byte));
-    memset(uncompressed, 0, *uncompressed_len * sizeof(byte));
-    uncompressed_index = 0;
-    
+    context.index = zlen - 4;
+    ulen = read_bits(zfd, &context, 16) | (read_bits(zfd, &context, 16) << 16);
+    uindex = 0;
     context.index = save_index; // 恢复index位置
+    
     bfinal = 0;
     btype = 0;
-    
     do {
-        bfinal = read_bits(&context, 1);
-        btype = read_bits(&context, 2);
+        bfinal = read_bits(zfd, &context, 1);
+        btype = read_bits(zfd, &context, 2);
         if (bfinal == 0) {
-            context.error = ERR_MULTI_SEGMENTS;
-            return NULL;
+            return ERR_MULTI_SEGMENTS;
         }
         
         if (btype == BTYPE_NONE) { // 无压缩
             context.bit = 0;
-            len = read_bits(&context, 16);
-            read_bits(&context, 16);
-            memcpy(uncompressed + uncompressed_index, compressed + context.index, len);
+            len = read_bits(zfd, &context, 16);
+            read_bits(zfd, &context, 16);
+            copy_bytes(zfd, context.index, ufd, uindex, len);
             context.index += len;
-            uncompressed_index += len;
+            uindex += len;
         } else if (btype == BTYPE_DYNAMIC) { // 动态Huffman
-            hlit = read_bits(&context, 5) + 257;
+            hlit = read_bits(zfd, &context, 5) + 257;
             if (hlit - 1 > MAX_CODE_LITERALS) {
-                context.error = ERR_LITERALS_NUM;
-                return NULL;
+                return ERR_LITERALS_NUM;
             }
             
-            hdist = read_bits(&context, 5) + 1;
+            hdist = read_bits(zfd, &context, 5) + 1;
             if (hdist - 1 > MAX_CODE_DISTANCES) {
-                context.error = ERR_DISTANCES_NUM;
-                return NULL;
+                return ERR_DISTANCES_NUM;
             }
             
-            hclen = read_bits(&context, 4) + 4;
+            hclen = read_bits(zfd, &context, 4) + 4;
             for (i = 0; i < hclen; i++) {
-                length_bits[DYNAMIC_LENGTH_ORDER[i]] = (byte) read_bits(&context, 3);
+                length_bits[DYNAMIC_LENGTH_ORDER[i]] = (byte) read_bits(zfd, &context, 3);
             }
             
             context.lengths_num = MAX_CODE_LENGTHS;
             create_huffman_tree(length_bits, MAX_CODE_LENGTHS, context.lengths_tree);
             
             context.literals_num = hlit - 1;
-            decode_code_lengths(&context, hlit, literal_bits);
+            decode_code_lengths(zfd, &context, hlit, literal_bits);
             create_huffman_tree(literal_bits, hlit - 1, context.literals_tree);
             
             context.distances_num = hdist - 1;
-            decode_code_lengths(&context, hdist, distance_bits);
+            decode_code_lengths(zfd, &context, hdist, distance_bits);
             create_huffman_tree(distance_bits, hdist - 1, context.distances_tree);
         } else { // 静态Huffman
             for (int i = 0; i < 144; i++) {
@@ -270,35 +308,37 @@ byte* inflate(byte *compressed, int compressed_len, int *uncompressed_len) {
         }
         
         code = leb = deb = 0;
-        while ((code = read_code(context.literals_tree, &context)) != EOB_CODE) {
+        while ((code = read_code(zfd, context.literals_tree, &context)) != EOB_CODE) {
             if (code > EOB_CODE) {
                 code -= 257;
                 length = LENGTH_VALUES[code];
                 if ((leb = LENGTH_EXTRA_BITS[code]) > 0) {
-                    length += read_bits(&context, leb);
+                    length += read_bits(zfd, &context, leb);
                 }
                 
-                code = read_code(context.distances_tree, &context);
+                code = read_code(zfd, context.distances_tree, &context);
                 distance = DISTANCE_VALUES[code];
                 if ((deb = DISTANCE_EXTRA_BITS[code]) > 0) {
-                    distance += read_bits(&context, deb);
+                    distance += read_bits(zfd, &context, deb);
                 }
                 
-                offset = uncompressed_index - distance;
+                offset = uindex - distance;
                 while (distance < length) {
-                    memcpy(uncompressed + uncompressed_index, uncompressed + offset, distance);
-                    uncompressed_index += distance;
+//                    memcpy(uncompressed + uncompressed_index, uncompressed + offset, distance);
+                    move_bytes(ufd, offset, uindex, distance);
+                    uindex += distance;
                     length -= distance;
                     distance <<= 1;
                 }
                 
-                memcpy(uncompressed + uncompressed_index, uncompressed + offset, length);
-                uncompressed_index += length;
+//                memcpy(uncompressed + uncompressed_index, uncompressed + offset, length);
+                move_bytes(ufd, offset, uindex, length);
+                uindex += length;
             } else {
-                uncompressed[uncompressed_index++] = (byte) code;
+                write_byte(ufd, uindex++, (byte) code);
             }
         }
     } while (bfinal == 0);
     
-    return uncompressed;
+    return ulen;
 }

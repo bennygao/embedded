@@ -63,7 +63,6 @@ int test_gunzip(const char *input_file, const char *output_file)
     int uncompressed_len;
     size_t size;
     struct stat stat;
-    unsigned char *origin, *dest;
     
     if ((fd = open(input_file, O_RDONLY)) < 0) {
         perror("open() source:");
@@ -81,19 +80,15 @@ int test_gunzip(const char *input_file, const char *output_file)
     }
     
     size = (long) stat.st_size;
-    origin = (unsigned char *) malloc(size);
-    bzero(origin, size);
-    
-    if (read(fd, origin, size) != size) {
-        perror("read()");
-        return -3;
-    }
+    uncompressed_len = gunzip(fd, (int) size, out_fd);
     close(fd);
-    
-    
-    dest = inflate(origin, (int) size, &uncompressed_len);
-    write(out_fd, dest, uncompressed_len);
     close(out_fd);
+    
+    if (uncompressed_len < 0) {
+        fprintf(stderr, "gunzip error code=%d\n", uncompressed_len);
+    } else {
+        printf("gunzip success, length=%d\n", uncompressed_len);
+    }
     
     return 0;
 }
@@ -144,7 +139,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     
-    printf("sizeof inflate context = %d\n", sizeof(struct inflate_context));
+    printf("sizeof inflate context = %lu\n", sizeof(struct inflate_context));
     test_gunzip(argv[1], argv[2]);
     
     return 0;

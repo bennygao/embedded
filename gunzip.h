@@ -25,9 +25,10 @@
 
 typedef unsigned char byte;
 
-#define ERR_MULTI_SEGMENTS  -1 // 不支持多段组合的gzip格式
-#define ERR_LITERALS_NUM    -2  // literal个数超限
-#define ERR_DISTANCES_NUM   -3 // distance个数超限
+#define ERR_FORMAT          -1 // 不支持的压缩格式
+#define ERR_MULTI_SEGMENTS  -2 // 不支持多段组合的gzip格式
+#define ERR_LITERALS_NUM    -3  // literal个数超限
+#define ERR_DISTANCES_NUM   -4 // distance个数超限
 
 struct inflate_context {
     int error;
@@ -36,7 +37,7 @@ struct inflate_context {
     int bit;
     
     int compressed_len;
-    byte *compressed;
+//    byte *compressed;
     
     int lengths_tree[MAX_LENGTHS_NUM];
     int lengths_num;
@@ -48,6 +49,7 @@ struct inflate_context {
     int distances_num;
 };
 
-extern byte* inflate(byte *compressed, int compressed_len, int *uncompressed_len);
+//extern byte* inflate(byte *compressed, int compressed_len, int *uncompressed_len);
+extern int gunzip(int zfd, int zlen, int ufd);
 
 #endif /* __gunzip_h_ */

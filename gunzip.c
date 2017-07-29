@@ -6,15 +6,31 @@
 
 #include "gunzip.h"
 
-const static int LENGTH_EXTRA_BITS[] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, 99, 99};
+const static int LENGTH_EXTRA_BITS[] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2,
+    3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, 99, 99
+};
 
-const static int LENGTH_VALUES[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258, 0, 0};
+const static int LENGTH_VALUES[] = {
+    3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
+    35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258, 0, 0
+};
 
-const static int DISTANCE_EXTRA_BITS[] = {0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13};
+const static int DISTANCE_EXTRA_BITS[] = {
+    0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6,
+    7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13
+};
 
-const static int DISTANCE_VALUES[] = {1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577};
+const static int DISTANCE_VALUES[] = {
+    1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129,
+    193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145,
+    8193, 12289, 16385, 24577
+};
 
-const static int DYNAMIC_LENGTH_ORDER[] = {16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15};
+const static int DYNAMIC_LENGTH_ORDER[] = {
+    16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2,
+    14, 1, 15
+};
 
 static void trace(FILE *fp, const char *fmt, ...)
 {
@@ -27,6 +43,16 @@ static void trace(FILE *fp, const char *fmt, ...)
     va_end(ap);
 }
 
+/***************************************************************************
+ * 需要改造成为flash读写的函数
+ ***************************************************************************/
+
+/**
+ * 从文件的指定偏移量处读入1个字节
+ * @param fd 文件描述符
+ * @param offset 偏移量
+ * @return 文件指定偏移量处读入的字节值
+ */
 int read_byte(int fd, int offset)
 {
     byte b;
@@ -35,6 +61,15 @@ int read_byte(int fd, int offset)
     return b & 0xFF;
 }
 
+/**
+ * 从压缩文件指定偏移量处拷贝指定长度的字节到解压缩文件指定偏移量处
+ * @param zfd 压缩文件的文件描述符
+ * @param zoff 压缩文件的偏移量，从这里开始拷贝数据。
+ * @param ufd 解压缩文件的文件描述符
+ * @param uoff 解压缩文件的偏移量，数据拷贝到这里。
+ * @param len 拷贝的数据长度
+ * @return 拷贝的字节数
+ */
 int copy_bytes(int zfd, int zoff, int ufd, int uoff, int len)
 {
     byte b;
@@ -50,12 +85,25 @@ int copy_bytes(int zfd, int zoff, int ufd, int uoff, int len)
     return len;
 }
 
+/**
+ * 写一个字节到文件的指定偏移量处
+ * @param fd 文件描述符
+ * @param offset 写入的偏移量
+ * @param v 写入的值
+ */
 void write_byte(int fd, int offset, byte v)
 {
     lseek(fd, offset, SEEK_SET);
     write(fd, &v, 1);
 }
 
+/**
+ * 移动文件中从src偏移量处的len个字节数据到dst偏移量处
+ * @param fd 文件描述符
+ * @param src 要移动数据的起始偏移量
+ * @param dst 要移动到的目标偏移量
+ * @param len 要移动数据字节长度
+ */
 void move_bytes(int fd, int src, int dst, int len)
 {
     int i;
@@ -67,6 +115,7 @@ void move_bytes(int fd, int src, int dst, int len)
         write(fd, &b, 1);
     }
 }
+/***************************************************************************/
 
 static void create_huffman_tree(byte *bits, int maxCode, int *tree) {
     int bl_count[MAX_BITS + 1];
@@ -194,17 +243,28 @@ static void decode_code_lengths(int zfd, struct inflate_context *context, int co
     }
 }
 
+/**
+ * 以gzip算法解压缩文件
+ * @param zfd 压缩文件的文件描述符
+ * @param zlen 压缩文件的长度
+ * @param ufd 解压缩文件的文件描述符
+ * @return 成功时返回解压缩后的长度。如果失败，返回负数：
+ *         -1表示不支持的压缩格式
+ *         -2表示literal个数超限
+ *         -3表示distance个数超限
+ */
 int gunzip(int zfd, int compressed_len, int ufd) {
-    int uncompressed_len = 0, uncompressed_index = 0;
-    int flg = 0, bfinal = 0, btype = 0, len = 0;
+    int ulen = 0; // 解压缩后的长度
+    int uindex = 0; // 解压缩数据偏移量索引
+    struct inflate_context context;
+    
+    int flg = 0, bfinal = 0, btype = 0, len = 0, bv;
     int hlit = 0, hdist = 0, hclen = 0, i = 0;
     byte distance_bits[MAX_CODE_DISTANCES + 1];
     byte length_bits[MAX_CODE_LENGTHS + 1];
     byte literal_bits[MAX_CODE_LITERALS + 1];
     int code = 0, leb = 0, deb = 0;
     int length = 0, distance = 0, offset = 0, save_index;
-    struct inflate_context context;
-    int sequ = 0, bv;
     
     memset(&context, 0, sizeof(struct inflate_context));
     if (read_bits(zfd, &context, 16) != 0x8B1F || read_bits(zfd, &context, 8) != 8) {
@@ -232,8 +292,8 @@ int gunzip(int zfd, int compressed_len, int ufd) {
     
     save_index = context.index; // 保存index当前位置
     context.index = compressed_len - 4;
-    uncompressed_len = read_bits(zfd, &context, 16) | (read_bits(zfd, &context, 16) << 16);
-    uncompressed_index = 0;
+    ulen = read_bits(zfd, &context, 16) | (read_bits(zfd, &context, 16) << 16);
+    uindex = 0;
     context.index = save_index; // 恢复index位置
     bfinal = 0;
     btype = 0;
@@ -251,9 +311,9 @@ int gunzip(int zfd, int compressed_len, int ufd) {
             context.bit = 0;
             len = read_bits(zfd, &context, 16);
             read_bits(zfd, &context, 16);
-            copy_bytes(zfd, context.index, ufd, uncompressed_index, len);
+            copy_bytes(zfd, context.index, ufd, uindex, len);
             context.index += len;
-            uncompressed_index += len;
+            uindex += len;
         } else {
             if (btype == BTYPE_DYNAMIC) { // 动态Huffman
                 trace(stderr, "********\n");
@@ -317,10 +377,8 @@ int gunzip(int zfd, int compressed_len, int ufd) {
             }
             
             code = leb = deb = 0;
-            sequ = 0;
             while ((code = read_code(zfd, context.literals_tree, &context)) != EOB_CODE) {
                 if (code > EOB_CODE) {
-                    ++sequ;
                     code -= 257;
                     length = LENGTH_VALUES[code];
                     if ((leb = LENGTH_EXTRA_BITS[code]) > 0) {
@@ -333,22 +391,22 @@ int gunzip(int zfd, int compressed_len, int ufd) {
                         distance += read_bits(zfd, &context, deb);
                     }
                     
-                    offset = uncompressed_index - distance;
+                    offset = uindex - distance;
                     while (distance < length) {
-                        move_bytes(ufd, offset, uncompressed_index, distance);
-                        uncompressed_index += distance;
+                        move_bytes(ufd, offset, uindex, distance);
+                        uindex += distance;
                         length -= distance;
                         distance <<= 1;
                     }
                     
-                    move_bytes(ufd, offset, uncompressed_index, length);
-                    uncompressed_index += length;
+                    move_bytes(ufd, offset, uindex, length);
+                    uindex += length;
                 } else {
-                    write_byte(ufd, uncompressed_index++, (byte) code);
+                    write_byte(ufd, uindex++, (byte) code);
                 }
             }
         }
     } while (bfinal == 0);
     
-    return uncompressed_len;
+    return ulen;
 }

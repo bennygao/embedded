@@ -3,7 +3,7 @@ RM=rm
 
 #CCFLAGS=-I. -g -DDEBUG
 CCFLAGS=-I. -Wall -O2
-LDFLAGS=-s
+LDFLAGS=
 
 OBJS=main.o gunzip.o aes.o
 TARGET=yagunzip

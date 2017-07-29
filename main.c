@@ -60,10 +60,8 @@ void print_binary(FILE *fp, void *ptr, int len)
 int test_gunzip(const char *input_file, const char *output_file)
 {
     int fd, out_fd;
-    int uncompressed_len;
-    size_t size;
+    int ulen; // 解压缩后的长度
     struct stat stat;
-    unsigned char *origin, *dest;
     
     if ((fd = open(input_file, O_RDONLY)) < 0) {
         perror("open() source:");
@@ -80,22 +78,14 @@ int test_gunzip(const char *input_file, const char *output_file)
         return -2;
     }
     
-    size = (long) stat.st_size;
-    origin = (unsigned char *) malloc(size);
-    bzero(origin, size);
-    
-    if (read(fd, origin, size) != size) {
-        perror("read()");
-        return -3;
+    ulen = gunzip(fd, (int) stat.st_size, out_fd);
+    if (ulen < 0) {
+        fprintf(stderr, "gunzip error code=%d", ulen);
     }
     close(fd);
-    
-    
-    dest = inflate(origin, (int) size, &uncompressed_len);
-    write(out_fd, dest, uncompressed_len);
     close(out_fd);
     
-    return 0;
+    return ulen;
 }
 
 int test_aes(void)
@@ -144,7 +134,6 @@ int main(int argc, char *argv[])
         return 1;
     }
     
-    printf("sizeof inflate context = %d\n", sizeof(struct inflate_context));
     test_gunzip(argv[1], argv[2]);
     
     return 0;

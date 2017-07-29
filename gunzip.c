@@ -117,7 +117,7 @@ void move_bytes(int fd, int src, int dst, int len)
 }
 /***************************************************************************/
 
-static void create_huffman_tree(byte *bits, int maxCode, int *tree) {
+static void create_huffman_tree(byte *bits, int max_code, int *tree) {
     int bl_count[MAX_BITS + 1];
     int code = 0, value = 0, left = 0, right = 0, node = 0;
     int next_code[MAX_BITS + 1];
@@ -127,7 +127,7 @@ static void create_huffman_tree(byte *bits, int maxCode, int *tree) {
     memset(bl_count, 0, sizeof(bl_count));
     memset(next_code, 0, sizeof(next_code));
     
-    for (i = 0; i < maxCode + 1; i++) {
+    for (i = 0; i < max_code + 1; i++) {
         bv = bits[i];
         trace(stderr, "(%d %d)", bv, bl_count[bv]);
         bl_count[bv]++;
@@ -135,7 +135,7 @@ static void create_huffman_tree(byte *bits, int maxCode, int *tree) {
     trace(stderr, "\n");
     bl_count[0] = 0;
     
-    trace(stderr, "maxCode=%d bitsLength=%d bl_count[%d]: ", maxCode, maxCode + 1, MAX_BITS + 1);
+    trace(stderr, "maxCode=%d bitsLength=%d bl_count[%d]: ", max_code, max_code + 1, MAX_BITS + 1);
     for (i = 0; i < MAX_BITS + 1; ++i) {
         trace(stderr, "%d,", bl_count[i]);
     }
@@ -153,7 +153,7 @@ static void create_huffman_tree(byte *bits, int maxCode, int *tree) {
     }
     trace(stderr, "\n");
     
-    for (i = 0; i <= maxCode; i++) {
+    for (i = 0; i <= max_code; i++) {
         len = bits[i];
         if (len != 0) {
             code = next_code[len]++;
@@ -253,7 +253,7 @@ static void decode_code_lengths(int zfd, struct inflate_context *context, int co
  *         -2表示literal个数超限
  *         -3表示distance个数超限
  */
-int gunzip(int zfd, int compressed_len, int ufd) {
+int gunzip(int zfd, int zlen, int ufd) {
     int ulen = 0; // 解压缩后的长度
     int uindex = 0; // 解压缩数据偏移量索引
     struct inflate_context context;
@@ -291,7 +291,7 @@ int gunzip(int zfd, int compressed_len, int ufd) {
     }
     
     save_index = context.index; // 保存index当前位置
-    context.index = compressed_len - 4;
+    context.index = zlen - 4;
     ulen = read_bits(zfd, &context, 16) | (read_bits(zfd, &context, 16) << 16);
     uindex = 0;
     context.index = save_index; // 恢复index位置

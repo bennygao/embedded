@@ -1,6 +1,5 @@
-//
-//  gunzip.h
-//
+// gunzip.h
+// GZip算法解压缩
 
 #ifndef __gunzip_h_
 #define __gunzip_h_
@@ -30,13 +29,10 @@ typedef unsigned char byte;
 #define ERR_DISTANCES_NUM   -3  // distance个数超限
 
 struct inflate_context {
-//    int error;
     int index;
     int byte;
     int bit;
-    
     int compressed_len;
-//    byte *compressed;
     
     int lengths_tree[MAX_LENGTHS_NUM];
     int lengths_num;

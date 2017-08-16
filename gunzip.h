@@ -46,6 +46,6 @@ struct inflate_context {
     int distances_num;
 };
 
-extern int gunzip(int zfd, int zlen, int ufd);
+extern int gunzip(int zfd, int zlen, byte *ubuf);
 
 #endif /* __gunzip_h_ */

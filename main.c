@@ -18,6 +18,7 @@ int test_gunzip(const char *input_file, const char *output_file) {
 	int fd, out_fd;
 	int ulen; // 解压缩后的长度
 	struct stat stat;
+	byte ubuf[SEGMENT_LEN];
 
 	if ((fd = open(input_file, O_RDONLY)) < 0) {
 		perror("open() source:");
@@ -34,9 +35,13 @@ int test_gunzip(const char *input_file, const char *output_file) {
 		return -2;
 	}
 
-	ulen = gunzip(fd, (int) stat.st_size, out_fd);
+	ulen = gunzip(fd, (int) stat.st_size, ubuf);
 	if (ulen < 0) {
 		fprintf(stderr, "gunzip error code=%d\n", ulen);
+	} else {
+		if (write(out_fd, ubuf, ulen) != ulen) {
+			fprintf(stderr, "write file error\n");
+		}
 	}
 	close(fd);
 	close(out_fd);
@@ -75,7 +80,9 @@ int test_aes(const char *input_file, const char *output_file) {
 			return -1;
 		}
 
-		write(ofd, plain, count);
+		if (write(ofd, plain, count) != count) {
+			fprintf(stderr, "write file error\n");
+		}
 	}
 
 	close(ifd);
@@ -121,14 +128,21 @@ int gzcompress(Bytef *data, uLong ndata, Bytef *zdata, uLong *nzdata) {
 int compress_file(const char *filename) {
 	int ifd; // input文件描述符
 	int ofd;
-	int count, sequence = 0;
+	int count, sequence = 0, total = 0;
 	char output_path[PATH_MAX];
 	byte buffer[SEGMENT_LEN], zipped[SEGMENT_LEN];
 	uLong zlen;
+	struct stat stat;
+	double rate;
 
 	if ((ifd = open(filename, O_RDONLY)) < 0) {
 		perror("open() source:");
 		return -1;
+	}
+
+	if (fstat(ifd, &stat) < 0) {
+		perror("fstat");
+		return -2;
 	}
 
 	while ((count = read(ifd, buffer, SEGMENT_LEN)) > 0) {
@@ -144,12 +158,18 @@ int compress_file(const char *filename) {
 				return -1;
 			}
 
-			write(ofd, zipped, zlen);
+			if (write(ofd, zipped, zlen) != zlen) {
+				fprintf(stderr, "write file error\n");
+			}
+			total += zlen;
 			close(ofd);
 		}
 	}
 
 	close(ifd);
+
+	rate = (double) total * 100 / stat.st_size;
+	printf("compress rate: %.2lf%%\n", rate);
 	return 0;
 }
 

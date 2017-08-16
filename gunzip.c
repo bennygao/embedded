@@ -57,8 +57,11 @@ int read_byte(int fd, int offset)
 {
     byte b;
     lseek(fd, offset, SEEK_SET);
-    read(fd, &b, 1);
-    return b & 0xFF;
+    if (read(fd, &b, 1) != 1) {
+    	return -1;
+    } else {
+    	return b & 0xFF;
+    }
 }
 
 /**
@@ -74,41 +77,41 @@ int copy_bytes(int zfd, int zoff, byte *ubuf, int uoff, int len)
 {
     byte b;
     int i;
-    
+
     lseek(zfd, zoff, SEEK_SET);
     return read(zfd, ubuf + uoff, len);
 }
 
-/**
- * 写一个字节到文件的指定偏移量处
- * @param fd 文件描述符
- * @param offset 写入的偏移量
- * @param v 写入的值
- */
-void write_byte(int fd, int offset, byte v)
-{
-    lseek(fd, offset, SEEK_SET);
-    write(fd, &v, 1);
-}
-
-/**
- * 移动文件中从src偏移量处的len个字节数据到dst偏移量处
- * @param fd 文件描述符
- * @param src 要移动数据的起始偏移量
- * @param dst 要移动到的目标偏移量
- * @param len 要移动数据字节长度
- */
-void move_bytes(int fd, int src, int dst, int len)
-{
-    int i;
-    byte b;
-    for (i = 0; i < len; ++i) {
-        lseek(fd, src + i, SEEK_SET);
-        read(fd, &b, 1);
-        lseek(fd, dst + i, SEEK_SET);
-        write(fd, &b, 1);
-    }
-}
+///**
+// * 写一个字节到文件的指定偏移量处
+// * @param fd 文件描述符
+// * @param offset 写入的偏移量
+// * @param v 写入的值
+// */
+//void write_byte(int fd, int offset, byte v)
+//{
+//    lseek(fd, offset, SEEK_SET);
+//    write(fd, &v, 1);
+//}
+//
+///**
+// * 移动文件中从src偏移量处的len个字节数据到dst偏移量处
+// * @param fd 文件描述符
+// * @param src 要移动数据的起始偏移量
+// * @param dst 要移动到的目标偏移量
+// * @param len 要移动数据字节长度
+// */
+//void move_bytes(int fd, int src, int dst, int len)
+//{
+//    int i;
+//    byte b;
+//    for (i = 0; i < len; ++i) {
+//        lseek(fd, src + i, SEEK_SET);
+//        read(fd, &b, 1);
+//        lseek(fd, dst + i, SEEK_SET);
+//        write(fd, &b, 1);
+//    }
+//}
 /***************************************************************************/
 
 static void create_huffman_tree(byte *bits, int max_code, int *tree) {

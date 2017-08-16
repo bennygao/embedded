@@ -4,6 +4,8 @@
 #ifndef __gunzip_h_
 #define __gunzip_h_
 
+#define SEGMENT_LEN 4096
+
 #define FHCRC_MASK 2
 #define FEXTRA_MASK 4
 #define FNAME_MASK 8

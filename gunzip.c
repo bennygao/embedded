@@ -70,19 +70,13 @@ int read_byte(int fd, int offset)
  * @param len 拷贝的数据长度
  * @return 拷贝的字节数
  */
-int copy_bytes(int zfd, int zoff, int ufd, int uoff, int len)
+int copy_bytes(int zfd, int zoff, byte *ubuf, int uoff, int len)
 {
     byte b;
     int i;
     
     lseek(zfd, zoff, SEEK_SET);
-    lseek(ufd, uoff, SEEK_SET);
-    for (i = 0; i < len; ++i) {
-        read(zfd, &b, 1);
-        write(ufd, &b, 1);
-    }
-    
-    return len;
+    return read(zfd, ubuf + uoff, len);
 }
 
 /**
@@ -108,7 +102,6 @@ void move_bytes(int fd, int src, int dst, int len)
 {
     int i;
     byte b;
-    fprintf(stderr, "move_bytes src=%d dst=%d len=%d ...\n", src, dst, len);
     for (i = 0; i < len; ++i) {
         lseek(fd, src + i, SEEK_SET);
         read(fd, &b, 1);
@@ -254,7 +247,7 @@ static void decode_code_lengths(int zfd, struct inflate_context *context, int co
  *         -2表示literal个数超限
  *         -3表示distance个数超限
  */
-int gunzip(int zfd, int zlen, int ufd) {
+int gunzip(int zfd, int zlen, byte *ubuf) {
     int ulen = 0; // 解压缩后的长度
     int uindex = 0; // 解压缩数据偏移量索引
     struct inflate_context context;
@@ -294,6 +287,11 @@ int gunzip(int zfd, int zlen, int ufd) {
     save_index = context.index; // 保存index当前位置
     context.index = zlen - 4;
     ulen = read_bits(zfd, &context, 16) | (read_bits(zfd, &context, 16) << 16);
+    if (ulen > SEGMENT_LEN) {
+    	fprintf(stderr, "uncompressed length is greater than %d\n", SEGMENT_LEN);
+    	return -1;
+    }
+
     uindex = 0;
     context.index = save_index; // 恢复index位置
     bfinal = 0;
@@ -312,7 +310,7 @@ int gunzip(int zfd, int zlen, int ufd) {
             context.bit = 0;
             len = read_bits(zfd, &context, 16);
             read_bits(zfd, &context, 16);
-            copy_bytes(zfd, context.index, ufd, uindex, len);
+            copy_bytes(zfd, context.index, ubuf, uindex, len);
             context.index += len;
             uindex += len;
         } else {
@@ -394,16 +392,16 @@ int gunzip(int zfd, int zlen, int ufd) {
                     
                     offset = uindex - distance;
                     while (distance < length) {
-                        move_bytes(ufd, offset, uindex, distance);
+                    	memcpy(ubuf + uindex, ubuf + offset, distance);
                         uindex += distance;
                         length -= distance;
                         distance <<= 1;
                     }
                     
-                    move_bytes(ufd, offset, uindex, length);
+                    memcpy(ubuf + uindex, ubuf + offset, length);
                     uindex += length;
                 } else {
-                    write_byte(ufd, uindex++, (byte) code);
+                	ubuf[uindex++] = (byte) code;
                 }
             }
         }

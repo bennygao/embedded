@@ -87,8 +87,8 @@ int main(int argc, char *argv[])
         return 1;
     }
     
-//    test_gunzip(argv[1], argv[2]);
-    test_aes(argv[1], argv[2]);
+    test_gunzip(argv[1], argv[2]);
+    // test_aes(argv[1], argv[2]);
     
     return 0;
 }

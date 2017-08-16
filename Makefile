@@ -2,7 +2,7 @@ CC=gcc
 RM=rm
 
 #CCFLAGS=-I. -g -DDEBUG
-CCFLAGS=-I. -Wall -O2
+CCFLAGS=-I. -O2
 LDFLAGS=
 
 OBJS=main.o gunzip.o aes.o

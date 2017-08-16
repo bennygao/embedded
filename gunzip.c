@@ -108,6 +108,7 @@ void move_bytes(int fd, int src, int dst, int len)
 {
     int i;
     byte b;
+    fprintf(stderr, "move_bytes src=%d dst=%d len=%d ...\n", src, dst, len);
     for (i = 0; i < len; ++i) {
         lseek(fd, src + i, SEEK_SET);
         read(fd, &b, 1);

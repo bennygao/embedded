@@ -1,8 +1,8 @@
 CC=gcc
 RM=rm
 
-#CCFLAGS=-I. -g -DDEBUG
-CCFLAGS=-I. -O2
+CCFLAGS=-I. -g -DDEBUG
+#CCFLAGS=-I. -O2
 LDFLAGS=-lz
 
 OBJS=main.o gunzip.o aes.o

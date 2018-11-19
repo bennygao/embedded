@@ -5,7 +5,7 @@ CCFLAGS=-I. -g -DDEBUG
 #CCFLAGS=-I. -O2
 LDFLAGS=-lz
 
-OBJS=main.o gunzip.o aes.o
+OBJS=main.o gunzip.o aes.o code128.o
 TARGET=yagunzip
 
 all:$(TARGET)

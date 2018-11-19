@@ -173,6 +173,23 @@ int compress_file(const char *filename) {
 	return 0;
 }
 
+void test_code128(const char *str)
+{
+    size_t barcode_length = code128_estimate_len(str);
+    char *barcode_data = (char *) malloc(barcode_length);
+    int i;
+    
+    barcode_length = code128_encode_gs1(str, barcode_data, barcode_length);
+    
+    /* barcode_length is now the actual number of "bars". */
+    printf("barcode_length=%d\n", barcode_length);
+    for (i = 0; i < barcode_length; i++) {
+        printf("%d,", (int) barcode_data[i]);
+    }
+    
+    printf("\n");
+}
+
 int main(int argc, char *argv[]) {
 	if (argc < 3) {
 		fprintf(stderr, "Usage: %s [-c|-d] <input file> <output file>\n",
